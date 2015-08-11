@@ -1,0 +1,17 @@
+Package: GENIE3
+Title: GENIE3: GEne Network Inference with Ensemble of Trees
+Version: 1.0
+Author: "Robrecht Cannoodt"
+Authors@R: c(
+    person("Robrecht", "Cannoodt", email = "robrecht.cannoodt@gmail.com", role = c("cre")),
+    person("Vân Anh", "Huynh-Thu", role = c("aut")),
+    person("Alexandre", "Irrthum", role = c("aut", "trl"))
+  )
+Description: R implementation of GEne Network Inference with Ensemble of Trees (GENIE3)
+Depends: R (>= 3.2.1)
+License: GPL (>= 2)
+LazyData: true
+Maintainer: 'Robrecht Cannoodt' <robrecht.cannoodt@gmail.com>
+Imports: randomForest, parallel, reshape2
+URL: http://github.com/rcannood/GENIE3
+BugReports: https://github.com/rcannood/GENIE3/issues
