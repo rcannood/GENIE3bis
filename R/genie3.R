@@ -14,7 +14,10 @@
 #' @export
 #'
 #' @examples
-#' weights <- genie3(expr.matrix, regulators=1:5, targets=6:10, mc.cores=8)
+#' data <- matrix(runif(100*10), ncol=10)
+#' true.matrix <- matrix(sample(0:1, 10*10, replace=T, prob=c(.9, .1)), ncol=10)
+#' diag(true.matrix) <- 0
+#' weights <- genie3(data, regulators=1:5, targets=6:10, mc.cores=8)
 #' ranking <- get.ranking(weights)
 #' evaluation <- evaluate.ranking(ranking, true.matrix=true.matrix)
 #' evaluation$au.score
@@ -30,6 +33,9 @@ genie3 <- function(data, K="sqrt", nb.trees=1000, regulators=seq_len(ncol(data))
   
   if (mc.cores > 1) {
     require(parallel)
+    lapplyfun <- function(...) mclapply(..., mc.cores=mc.cores)
+  } else {
+    lapplyfun <- lapply
   }
   
   # set random number generator seed if seed is given
@@ -43,7 +49,7 @@ genie3 <- function(data, K="sqrt", nb.trees=1000, regulators=seq_len(ncol(data))
   
   num.samples <- nrow(data)
   num.genes <- ncol(data)
-  gene.names <- colnames(data)
+  feature.names <- colnames(data)
   
   # check regulators parameter
   if (is.null(regulators)) {
@@ -52,7 +58,7 @@ genie3 <- function(data, K="sqrt", nb.trees=1000, regulators=seq_len(ncol(data))
     regulators <- match(regulators, colnames(data))
   }
   num.regulators <- length(regulators)
-  regulator.names <- gene.names[regulators]
+  regulator.names <- feature.names[regulators]
   
   # check targets parameter
   if (is.null(targets)) {
@@ -61,7 +67,7 @@ genie3 <- function(data, K="sqrt", nb.trees=1000, regulators=seq_len(ncol(data))
     targets <- match(targets, colnames(data))
   }
   num.targets <- length(targets)
-  target.names <- gene.names[targets]
+  target.names <- feature.names[targets]
   
   # check mtry parameter
   if (class(K) == "numeric") {
@@ -76,9 +82,9 @@ genie3 <- function(data, K="sqrt", nb.trees=1000, regulators=seq_len(ncol(data))
   
   if (trace) {
     cat("Starting RF computations with ", nb.trees,
-              " trees/target gene,\nand ", mtry,
-              " candidate input genes/tree node\n",
-              sep="")
+        " trees/target, and ", mtry,
+        " candidate input genes/tree node\n",
+        sep="")
     flush.console()
   }
   
@@ -88,19 +94,20 @@ genie3 <- function(data, K="sqrt", nb.trees=1000, regulators=seq_len(ncol(data))
   # compute importances for every target 
   execute <- function(target.index) {
     if (trace) {
-      cat(paste("Computing for target ", gene.names[[target.index]], "\n", sep=""))
+      cat("Computing for target ", ifelse(is.null(feature.names), target.index, feature.names[[target.index]]), "\n", sep="")
       flush.console()
     }
     x <- data[,setdiff(regulators, target.index),drop=F]
     y <- data[,target.index]
     rf <- randomForest(x, y, mtry=mtry, ntree=nb.trees, importance=TRUE)
     im <- rf$importance[,importance.measure]
+    
     out <- setNames(rep(0, num.regulators), regulator.names)
-    out[names(im)] <- im
+    out[target.index != regulators] <- im
     out
   }
   
-  output <- do.call("cbind", mclapply(targets, execute, mc.cores=mc.cores))
+  output <- do.call("cbind", lapplyfun(targets, execute))
   
   rownames(output) <- regulator.names
   colnames(output) <- target.names
@@ -117,9 +124,8 @@ genie3 <- function(data, K="sqrt", nb.trees=1000, regulators=seq_len(ncol(data))
 #' @return A data frame of links.
 #' @export
 get.ranking <- function(matrix, decreasing=T, max.links=100000) {
-  
   require(reshape2)
-  df <- melt(m, varnames = c("regulator", "target"))
+  df <- melt(matrix, varnames = c("regulator", "target"))
   
   # remove self loops
   df <- df[as.character(df$regulator) != as.character(df$target),]
@@ -138,66 +144,67 @@ get.ranking <- function(matrix, decreasing=T, max.links=100000) {
 }
 
 
-# # evaluate.ni.ranking: evaluate the NI ranking
-# #
-# # Parameters (required):
-# #    -- ranking: the data frame as returned by 'get.ranking'. This data frame must contain at least 2 columns, called 'tf' and 'target'.
-# #    -- gold.matrix: a matrix with 0's and 1's, representing the golden standard. The rownames and 
-# #                       colnames must me the same as the names used in the tf and target columns in 'ranking'.
-# #
-# # Parameters (optional):
-# #    -- perf.measures: the performance measured in ROCR. Must at least contain 'fpr', 'rec', 'spec', and 'prec'!
-# #
-# # Returns:
-# #    a list containing 2 items, the ranked evaluation and the area under the curve scores
-# #
-# #' Title
-# #'
-# #' @param ranking 
-# #' @param gold.matrix 
-# #' @param method 
-# #' @param perf.measures 
-# #'
-# #' @return
-# #' @export
-# #'
-# #' @examples
-# evaluate.ni.ranking <- function(ranking, gold.matrix, method=NULL, perf.measures=c("acc", "rec", "prec", "fpr", "spec", "phi", "f")) {
-#   require(ROCR)
-#   require(pracma)
-#   
-#   # get TPs along ranking
-#   gold.edge <- mapply(as.character(ranking$tf), as.character(ranking$target), FUN=function(tf, target) {
-#     if (tf %in% rownames(gold.matrix) && target %in% colnames(gold.matrix)) {
-#       gold.matrix[[tf, target]]
-#     } else {
-#       0
-#     }
-#   })
-#   
-#   # iterate over ranking and calculate the eval df using given metrics
-#   pred <- 1-seq_len(nrow(ranking))/nrow(ranking)
-#   rocr.pred <- prediction(pred, gold.edge)
-#   
-#   metrics <- do.call("cbind", lapply(perf.measures, function(p) performance(rocr.pred, p, x.measure="cutoff")@y.values[[1]]))
-#   colnames(metrics) <- perf.measures
-#   
-#   eval.df <- data.frame(
-#     cutoff=performance(rocr.pred, "acc", x.measure="cutoff")@x.values[[1]],
-#     balanced.acc=rowMeans(metrics[,c("rec", "spec")]),
-#     metrics
-#   )
-#   
-#   # calculate AUs
-#   auroc <- trapz(eval.df$fpr, eval.df$rec)
-#   aupr <- abs(trapz(eval.df$rec[-1], eval.df$prec[-1]))
-#   P <- sum(gold.matrix, na.rm=T)
-#   if (P > 1) {
-#     aupr <- aupr / (1.0 - 1.0 / P)
-#   }
-#   F1 <- ifelse(auroc + aupr != 0, 2 * auroc * aupr / auroc + aupr, 0)
-#   au.df <- data.frame(auroc=auroc, aupr=aupr, F1=F1)
-#   
-#   # generate output
-#   list(ranked.df=eval.df, au.score=au.df)
-# }
+# evaluate.ni.ranking: evaluate the NI ranking
+#
+# Parameters (required):
+#    -- ranking: the data frame as returned by 'get.ranking'. This data frame must contain at least 2 columns, called 'regulator' and 'target'.
+#    -- true.matrix: a matrix with 0's and 1's, representing the golden standard. The rownames and 
+#                       colnames must me the same as the names used in the regulator and target columns in 'ranking'.
+#
+# Parameters (optional):
+#    -- perf.measures: the performance measured in ROCR. Must at least contain 'fpr', 'rec', 'spec', and 'prec'!
+#
+# Returns:
+#    a list containing 2 items, the ranked evaluation and the area under the curve scores
+#
+#' Title
+#'
+#' @param ranking 
+#' @param true.matrix 
+#' @param method 
+#' @param perf.measures 
+#'
+#' @return
+#' @export
+#'
+#' @examples
+evaluate.ranking <- function(ranking, true.matrix, method=NULL, perf.measures=c("acc", "rec", "prec", "fpr", "spec", "phi", "f")) {
+  require(ROCR)
+  require(pracma)
+  require(dplyr)
+  
+  # get TPs along ranking
+  true.edges <- mapply(as.character(ranking$regulator), as.character(ranking$target), FUN=function(regulator, target) {
+    if (regulator %in% rownames(true.matrix) && target %in% colnames(true.matrix)) {
+      true.matrix[[regulator, target]]
+    } else {
+      0
+    }
+  })
+  
+  # iterate over ranking and calculate the eval df using given metrics
+  pred <- 1-seq_len(nrow(ranking))/nrow(ranking)
+  rocr.pred <- prediction(pred, true.edges)
+  
+  metrics <- do.call("cbind", lapply(perf.measures, function(p) performance(rocr.pred, p, x.measure="cutoff")@y.values[[1]]))
+  colnames(metrics) <- perf.measures
+  
+  eval.df <- data.frame(
+    cutoff=performance(rocr.pred, "acc", x.measure="cutoff")@x.values[[1]],
+    balanced.acc=rowMeans(metrics[,c("rec", "spec")]),
+    metrics
+  )
+  
+  # calculate AUs
+  auroc <- trapz(eval.df$fpr, eval.df$rec)
+  aupr <- abs(trapz(eval.df$rec[-1], eval.df$prec[-1]))
+  P <- sum(true.matrix, na.rm=T)
+  if (P > 1) {
+    aupr <- aupr / (1.0 - 1.0 / P)
+  }
+  F1 <- ifelse(auroc + aupr != 0, 2 * auroc * aupr / auroc + aupr, 0)
+  au.df <- data.frame(auroc=auroc, aupr=aupr, F1=F1)
+  
+  # generate output
+  list(ranked.df=eval.df, au.score=au.df)
+}
