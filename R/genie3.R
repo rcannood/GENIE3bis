@@ -14,20 +14,20 @@
 #' @export
 #'
 #' @examples
-#' data <- matrix(runif(100*10), ncol=10)
-#' true.matrix <- matrix(sample(0:1, 10*10, replace=T, prob=c(.9, .1)), ncol=10)
+#' data <- matrix(runif(100*100), ncol=100)
+#' true.matrix <- matrix(sample(0:1, 20*100, replace=T, prob=c(.9, .1)), ncol=10)
 #' diag(true.matrix) <- 0
-#' weights <- genie3(data, regulators=1:5, targets=6:10, mc.cores=8)
+#' weights <- genie3(data, regulators=1:20, targets=1:100, mc.cores=8)
 #' ranking <- get.ranking(weights)
 #' evaluation <- evaluate.ranking(ranking, true.matrix=true.matrix)
 #' evaluation$au.score
-#'
+#' 
 #' # ROC curve
 #' library(ggplot2)
-#' ggplot(evaluation$ranked.df, aes(fpr, rec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1))
+#' ggplot(evaluation$metrics, aes(fpr, rec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1))
 #' 
 #' # PR curve
-#' ggplot(evaluation$ranked.df, aes(rec, prec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1))
+#' ggplot(evaluation$metrics, aes(rec, prec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1))
 genie3 <- function(data, K="sqrt", nb.trees=1000, regulators=seq_len(ncol(data)), targets=seq_len(ncol(data)), importance.measure="IncNodePurity", seed=NULL, trace=TRUE, mc.cores=1) {
   require(randomForest)
   
@@ -81,10 +81,7 @@ genie3 <- function(data, K="sqrt", nb.trees=1000, regulators=seq_len(ncol(data))
   }
   
   if (trace) {
-    cat("Starting RF computations with ", nb.trees,
-        " trees/target, and ", mtry,
-        " candidate input genes/tree node\n",
-        sep="")
+    cat("Starting RF computations with ", nb.trees, " trees/target, and ", mtry, " candidate input genes/tree node\n", sep="")
     flush.console()
   }
   
@@ -118,74 +115,54 @@ genie3 <- function(data, K="sqrt", nb.trees=1000, regulators=seq_len(ncol(data))
 #' Make an ordered data frame of regulatory links
 #'
 #' @param matrix A weighted adjacency matrix as returned by genie3.
-#' @param decreasing False if matrix is a distance matrix instead.
 #' @param max.links The maximum number of links to output.
 #'
 #' @return A data frame of links.
 #' @export
-get.ranking <- function(matrix, decreasing=T, max.links=100000) {
+get.ranking <- function(weights, max.links=100000) {
   require(reshape2)
-  df <- melt(matrix, varnames = c("regulator", "target"))
+  require(dplyr)
+  ranking <- 
+    weights %>% 
+    melt(varnames=c("regulator", "target")) %>%                     # transform into a data frame
+    filter(as.character(regulator) != as.character(target)) %>%     # remove self loops
+    arrange(desc(value))                                            # order by value
   
-  # remove self loops
-  df <- df[as.character(df$regulator) != as.character(df$target),]
-  
-  # order by value
-  o <- order(df$value, decreasing=decreasing)
-  
-  # select max number of links if so desired
-  if (is.integer(max.links) && length(o) > max.links)
-    o <- o[seq_len(max.links)]
-
-  # create ranking
-  ranking <- df[o,]
-  rownames(ranking) <- NULL
+  if (is.integer(max.links) && nrow(ranking) > max.links) {
+    ranking <- ranking %>% top_n(value, max.links)                  # take top max.links edges
+  }
+    
   ranking
 }
 
-
-# evaluate.ni.ranking: evaluate the NI ranking
-#
-# Parameters (required):
-#    -- ranking: the data frame as returned by 'get.ranking'. This data frame must contain at least 2 columns, called 'regulator' and 'target'.
-#    -- true.matrix: a matrix with 0's and 1's, representing the golden standard. The rownames and 
-#                       colnames must me the same as the names used in the regulator and target columns in 'ranking'.
-#
-# Parameters (optional):
-#    -- perf.measures: the performance measured in ROCR. Must at least contain 'fpr', 'rec', 'spec', and 'prec'!
-#
-# Returns:
-#    a list containing 2 items, the ranked evaluation and the area under the curve scores
-#
-#' Title
+#' Title Evaluate a network ranking
 #'
-#' @param ranking 
-#' @param true.matrix 
+#' @param ranking the data frame as returned by 'get.ranking'. This data frame must contain at least 2 columns, called 'regulator' and 'target'.
+#' @param true.matrix a matrix with 0's and 1's, representing the golden standard. The rownames and colnames must me the same as the names used in the regulator and target columns in 'ranking'.
 #' @param method 
-#' @param perf.measures 
+#' @param perf.measures the performance measured in ROCR. Must at least contain 'fpr', 'rec', 'spec', and 'prec'.
 #'
-#' @return
+#' @return a list containing 2 items, the ranked evaluation and the area under the curve scores
 #' @export
 #'
 #' @examples
-evaluate.ranking <- function(ranking, true.matrix, method=NULL, perf.measures=c("acc", "rec", "prec", "fpr", "spec", "phi", "f")) {
+evaluate.ranking <- function(ranking, true.matrix, perf.measures=c("acc", "rec", "prec", "fpr", "spec", "phi", "f")) {
   require(ROCR)
   require(pracma)
   require(dplyr)
   
   # get TPs along ranking
-  true.edges <- mapply(as.character(ranking$regulator), as.character(ranking$target), FUN=function(regulator, target) {
-    if (regulator %in% rownames(true.matrix) && target %in% colnames(true.matrix)) {
-      true.matrix[[regulator, target]]
-    } else {
-      0
-    }
-  })
+  reg.names <- if (class(ranking$regulator) == "integer") seq_len(nrow(true.matrix)) else rownames(true.matrix)
+  tar.names <- if (class(ranking$target) == "integer") seq_len(ncol(true.matrix)) else colnames(true.matrix)
+  ranking2 <- ranking %>% mutate(
+    tp=mapply(regulator, target, FUN=function(r, t) {
+      if (r %in% reg.names & t %in% tar.names) true.matrix[[r, t]] else 0
+    }),
+    value=if("value" %in% colnames(ranking)) value else percent_rank(-seq_len(nrow(ranking)))
+  )
   
   # iterate over ranking and calculate the eval df using given metrics
-  pred <- 1-seq_len(nrow(ranking))/nrow(ranking)
-  rocr.pred <- prediction(pred, true.edges)
-  
+  rocr.pred <- prediction(ranking2$value, ranking2$tp)
   metrics <- do.call("cbind", lapply(perf.measures, function(p) performance(rocr.pred, p, x.measure="cutoff")@y.values[[1]]))
   colnames(metrics) <- perf.measures
   
@@ -206,5 +183,5 @@ evaluate.ranking <- function(ranking, true.matrix, method=NULL, perf.measures=c(
   au.df <- data.frame(auroc=auroc, aupr=aupr, F1=F1)
   
   # generate output
-  list(ranked.df=eval.df, au.score=au.df)
+  list(metrics=eval.df, au.score=au.df)
 }
