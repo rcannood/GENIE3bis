@@ -4,14 +4,12 @@
 \alias{get.ranking}
 \title{Make an ordered data frame of regulatory links}
 \usage{
-get.ranking(matrix, decreasing = T, max.links = 1e+05)
+get.ranking(weights, max.links = 1e+05)
 }
 \arguments{
-\item{matrix}{A weighted adjacency matrix as returned by genie3.}
-
-\item{decreasing}{False if matrix is a distance matrix instead.}
-
 \item{max.links}{The maximum number of links to output.}
+
+\item{matrix}{A weighted adjacency matrix as returned by genie3.}
 }
 \value{
 A data frame of links.

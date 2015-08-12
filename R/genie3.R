@@ -144,8 +144,6 @@ get.ranking <- function(weights, max.links=100000) {
 #'
 #' @return a list containing 2 items, the ranked evaluation and the area under the curve scores
 #' @export
-#'
-#' @examples
 evaluate.ranking <- function(ranking, true.matrix, perf.measures=c("acc", "rec", "prec", "fpr", "spec", "phi", "f")) {
   require(ROCR)
   require(pracma)

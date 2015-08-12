@@ -35,16 +35,19 @@ The weighted adjacency matrix of inferred network.
 Compute weighted adjacency matrix of inferred network
 }
 \examples{
-weights <- genie3(expr.matrix, regulators=1:5, targets=6:10, mc.cores=8)
+data <- matrix(runif(100*100), ncol=100)
+true.matrix <- matrix(sample(0:1, 20*100, replace=T, prob=c(.9, .1)), ncol=10)
+diag(true.matrix) <- 0
+weights <- genie3(data, regulators=1:20, targets=1:100, mc.cores=8)
 ranking <- get.ranking(weights)
 evaluation <- evaluate.ranking(ranking, true.matrix=true.matrix)
 evaluation$au.score
 
 # ROC curve
 library(ggplot2)
-ggplot(evaluation$ranked.df, aes(fpr, rec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1))
+ggplot(evaluation$metrics, aes(fpr, rec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1))
 
 # PR curve
-ggplot(evaluation$ranked.df, aes(rec, prec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1))
+ggplot(evaluation$metrics, aes(rec, prec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1))
 }
 
