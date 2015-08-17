@@ -1,21 +1,25 @@
 #' Compute weighted adjacency matrix of inferred network
 #'
 #' @param data A matrix of observations of the different features. The rows must contain the observations.
-#' @param K The choice of number of input genes randomly selected as candidates at each node. Must be "all" for all input features, "sqrt" for the square root of all input features (default), or an integer.
+#' @param K The choice of number of input genes randomly selected as candidates at each node. Must be \code{"all"} for all input features, \code{"sqrt"} for the square root of all input features (default), or an integer.
 #' @param nb.trees The number of trees in ensemble for each target gene (default 1000).
 #' @param regulators A set of indices or column names of entities whose observed values regulate the observed values of the targets.
 #' @param targets A set of indices or column names of entities whose observed values are regulated by the regulators.
-#' @param importance.measure Type of variable importance measure. Must be either "IncNodePurity" for the importance measure based on decrease of residual sum of squares, or "%IncMSE" for importance measure optained by permutation of OOB data."
+#' @param importance.measure Type of variable importance measure. Must be either \code{"IncNodePurity"} for the importance measure based on decrease of residual sum of squares, or \code{"\%IncMSE"} for importance measure optained by permutation of OOB data.
 #' @param seed A random number generator seed for replication of analyses. NULL means the seed is not set.
 #' @param trace Output additional information.
-#' @param mc.cores The number of threads to use for parallel execution.
+#' @param mc.cores The number of threads to use for parallel execution.\code{\link{genie3}}
 #'
+#' @references Huynh-Thu, V. A. et al. (2010) Inferring Regulatory Networks from Expression Data Using Tree-Based Methods. PLoS ONE.
+#' 
 #' @return The weighted adjacency matrix of inferred network.
 #' @export
+#' 
+#' @import randomForest parallel
 #'
 #' @examples
 #' data <- matrix(runif(100*100), ncol=100)
-#' true.matrix <- matrix(sample(0:1, 20*100, replace=T, prob=c(.9, .1)), ncol=10)
+#' true.matrix <- matrix(sample(0:1, 20*100, replace=TRUE, prob=c(.9, .1)), ncol=10)
 #' diag(true.matrix) <- 0
 #' weights <- genie3(data, regulators=1:20, targets=1:100, mc.cores=8)
 #' ranking <- get.ranking(weights)
@@ -28,34 +32,34 @@
 #' 
 #' # PR curve
 #' ggplot(evaluation$metrics, aes(rec, prec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1))
-genie3 <- function(data, K="sqrt", nb.trees=1000, regulators=seq_len(ncol(data)), targets=seq_len(ncol(data)), importance.measure="IncNodePurity", seed=NULL, trace=TRUE, mc.cores=1) {
-  require(randomForest)
+genie3 <- function(data, regulators=seq_len(ncol(data)), targets=seq_len(ncol(data)), 
+                   K="sqrt", nb.trees=1000, importance.measure="IncNodePurity", 
+                   seed=NULL, trace=TRUE, mc.cores=1) {
+  requireNamespace("randomForest")
   
-  if (mc.cores > 1) {
-    require(parallel)
-    lapplyfun <- function(...) mclapply(..., mc.cores=mc.cores)
-  } else {
-    lapplyfun <- lapply
-  }
-  
-  # set random number generator seed if seed is given
-  if (!is.null(seed)) {
-    set.seed(seed)
-  }
-  
-  if (importance.measure != "IncNodePurity" && importance.measure != "%IncMSE") {
-    stop("Parameter importance.measure must be \"IncNodePurity\" or \"%IncMSE\"")
+  if (!(is.matrix(data) || is.data.frame(data)) || any(!apply(data, 2, is.finite))) {
+    stop("Parameter \"data\" must be a matrix or a data frame consisting of finite values.")
   }
   
   num.samples <- nrow(data)
   num.genes <- ncol(data)
   feature.names <- colnames(data)
   
+  # check nb.trees parameter
+  if (nb.trees < 1) {
+    stop("Parameter \"nb.trees\" must be larger than or equal to 0")
+  }
+  
   # check regulators parameter
   if (is.null(regulators)) {
     regulators <- seq_len(num.genes)
   } else if (class(regulators) == "character") {
-    regulators <- match(regulators, colnames(data))
+    regulators <- match(regulators, feature.names)
+  }
+  if ((class(regulators) != "numeric" && class(regulators) != "integer") || 
+      !all(regulators %in% seq_len(num.genes)) || 
+      length(unique(regulators)) != length(regulators)) {
+    stop("Parameter \"regulators\" must either be NULL, or be a subset of either colnames(data) or seq_len(ncol(data)), and may not contain any repeated elements.")
   }
   num.regulators <- length(regulators)
   regulator.names <- feature.names[regulators]
@@ -64,12 +68,17 @@ genie3 <- function(data, K="sqrt", nb.trees=1000, regulators=seq_len(ncol(data))
   if (is.null(targets)) {
     targets <- seq_len(num.genes)
   } else if (class(targets) == "character") {
-    targets <- match(targets, colnames(data))
+    targets <- match(targets, feature.names)
+  }
+  if ((class(targets) != "numeric" && class(targets) != "integer") || 
+      !all(targets %in% seq_len(num.genes)) || 
+      length(unique(targets)) != length(targets)) {
+    stop("Parameter \"targets\" must either be NULL, or be a subset of either colnames(data) or seq_len(ncol(data)), and may not contain any repeated elements.")
   }
   num.targets <- length(targets)
   target.names <- feature.names[targets]
   
-  # check mtry parameter
+  # check K parameter
   if (class(K) == "numeric") {
     mtry <- K
   } else if (K == "sqrt") {
@@ -77,34 +86,53 @@ genie3 <- function(data, K="sqrt", nb.trees=1000, regulators=seq_len(ncol(data))
   } else if (K == "all") {
     mtry <- num.regulators-1
   } else {
-    stop("Parameter K must be \"sqrt\", or \"all\", or an integer")
+    stop("Parameter \"K\" must be \"sqrt\", or \"all\", or an integer")
+  }
+  
+  # check importance.measure parameter
+  if (importance.measure != "IncNodePurity" && importance.measure != "%IncMSE") {
+    stop("Parameter \"importance.measure\" must be \"IncNodePurity\" or \"%IncMSE\"")
+  }
+  
+  # check seed parameter, use the current seed if none is given.
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+  
+  # check mc.cores parameter
+  if (mc.cores < 1) {
+    stop("Parameter \"mc.cores\" must be larger than or equal to 0")
+  } else if (mc.cores > 1) {
+    requireNamespace("parallel")
+    lapplyfun <- function(...) parallel::mclapply(..., mc.cores=mc.cores)
+  } else {
+    lapplyfun <- lapply
   }
   
   if (trace) {
-    cat("Starting RF computations with ", nb.trees, " trees/target, and ", mtry, " candidate input genes/tree node\n", sep="")
+    cat("GENIE3 parameter checks are OK!\n")
+    cat("Starting GENIE3 computations.\n")
     flush.console()
   }
   
-  # normalise expression matrix
+  # scale the data matrix
   data <- scale(data)
   
   # compute importances for every target 
-  execute <- function(target.index) {
+  output <- do.call("cbind", lapplyfun(targets, function(target.index) {
     if (trace) {
       cat("Computing for target ", ifelse(is.null(feature.names), target.index, feature.names[[target.index]]), "\n", sep="")
       flush.console()
     }
     x <- data[,setdiff(regulators, target.index),drop=F]
     y <- data[,target.index]
-    rf <- randomForest(x, y, mtry=mtry, ntree=nb.trees, importance=TRUE)
+    rf <- randomForest::randomForest(x, y, mtry=mtry, ntree=nb.trees, importance=TRUE)
     im <- rf$importance[,importance.measure]
     
     out <- setNames(rep(0, num.regulators), regulator.names)
     out[target.index != regulators] <- im
     out
-  }
-  
-  output <- do.call("cbind", lapplyfun(targets, execute))
+  }))
   
   rownames(output) <- regulator.names
   colnames(output) <- target.names
@@ -114,65 +142,73 @@ genie3 <- function(data, K="sqrt", nb.trees=1000, regulators=seq_len(ncol(data))
 
 #' Make an ordered data frame of regulatory links
 #'
-#' @param matrix A weighted adjacency matrix as returned by genie3.
+#' @param weights A weighted adjacency matrix as returned by \code{\link{genie3}}
 #' @param max.links The maximum number of links to output.
 #'
 #' @return A data frame of links.
+#' @import reshape2 dplyr
 #' @export
+#' 
+#' @seealso \code{\link{genie3}}
 get.ranking <- function(weights, max.links=100000) {
-  require(reshape2)
-  require(dplyr)
-  ranking <- 
-    weights %>% 
-    melt(varnames=c("regulator", "target")) %>%                     # transform into a data frame
-    filter(as.character(regulator) != as.character(target)) %>%     # remove self loops
-    arrange(desc(value))                                            # order by value
+  requireNamespace("reshape2")
+  requireNamespace("dplyr")
+  
+  # This following line is added just to appease R check. When looking at this code, pretend this line doesn't exist.
+  regulator <- target <- value <- NULL
+  
+  ranking <- reshape2::melt(weights, varnames=c("regulator", "target"))                # transform into an expanded data frame
+  ranking <- dplyr::filter(ranking, as.character(regulator) != as.character(target))   # remove self loops
+  ranking <- dplyr::arrange(ranking, dplyr::desc(value))                               # order by value
   
   if (is.integer(max.links) && nrow(ranking) > max.links) {
-    ranking <- ranking %>% top_n(value, max.links)                  # take top max.links edges
+    ranking <- dplyr::top_n(ranking, value, max.links)                                 # take top max.links edges
   }
-    
+  
   ranking
 }
 
 #' Title Evaluate a network ranking
 #'
-#' @param ranking the data frame as returned by 'get.ranking'. This data frame must contain at least 2 columns, called 'regulator' and 'target'.
-#' @param true.matrix a matrix with 0's and 1's, representing the golden standard. The rownames and colnames must me the same as the names used in the regulator and target columns in 'ranking'.
-#' @param method 
-#' @param perf.measures the performance measured in ROCR. Must at least contain 'fpr', 'rec', 'spec', and 'prec'.
+#' @param ranking the data frame as returned by \code{\link{get.ranking}}. This data frame must contain at least 2 columns, called \code{regulator} and \code{target}.
+#' @param true.matrix a matrix with 0's and 1's, representing the golden standard. The rownames and colnames must me the same as the names used in the regulator and target columns in \code{ranking}.
+#' @param perf.measures the ROCR performance measures (See \code{\link[ROCR]{performance}}). Must at least contain \code{"fpr"}, \code{"rec"}, \code{"spec"}, and \code{"prec"}.
 #'
 #' @return a list containing 2 items, the ranked evaluation and the area under the curve scores
+#' @import ROCR pracma dplyr
 #' @export
+#' 
+#' @seealso \code{\link{genie3}}
 evaluate.ranking <- function(ranking, true.matrix, perf.measures=c("acc", "rec", "prec", "fpr", "spec", "phi", "f")) {
-  require(ROCR)
-  require(pracma)
-  require(dplyr)
+  requireNamespace("ROCR")
+  requireNamespace("pracma")
+  requireNamespace("dplyr")
+  
+  # This following line is added just to appease R check. When looking at this code, pretend this line doesn't exist.
+  regulator <- target <- value <- NULL 
   
   # get TPs along ranking
   reg.names <- if (class(ranking$regulator) == "integer") seq_len(nrow(true.matrix)) else rownames(true.matrix)
   tar.names <- if (class(ranking$target) == "integer") seq_len(ncol(true.matrix)) else colnames(true.matrix)
-  ranking2 <- ranking %>% mutate(
-    tp=mapply(regulator, target, FUN=function(r, t) {
-      if (r %in% reg.names & t %in% tar.names) true.matrix[[r, t]] else 0
-    }),
+  ranking <- dplyr::mutate(ranking,
+    tp=mapply(regulator, target, FUN=function(r, t) if (r %in% reg.names & t %in% tar.names) true.matrix[[r, t]] else 0),
     value=if("value" %in% colnames(ranking)) value else percent_rank(-seq_len(nrow(ranking)))
   )
   
   # iterate over ranking and calculate the eval df using given metrics
-  rocr.pred <- prediction(ranking2$value, ranking2$tp)
-  metrics <- do.call("cbind", lapply(perf.measures, function(p) performance(rocr.pred, p, x.measure="cutoff")@y.values[[1]]))
+  rocr.pred <- ROCR::prediction(ranking$value, ranking$tp)
+  metrics <- do.call("cbind", lapply(perf.measures, function(p) ROCR::performance(rocr.pred, p, x.measure="cutoff")@y.values[[1]]))
   colnames(metrics) <- perf.measures
   
   eval.df <- data.frame(
-    cutoff=performance(rocr.pred, "acc", x.measure="cutoff")@x.values[[1]],
+    cutoff=ROCR::performance(rocr.pred, "acc", x.measure="cutoff")@x.values[[1]],
     balanced.acc=rowMeans(metrics[,c("rec", "spec")]),
     metrics
   )
   
   # calculate AUs
-  auroc <- trapz(eval.df$fpr, eval.df$rec)
-  aupr <- abs(trapz(eval.df$rec[-1], eval.df$prec[-1]))
+  auroc <- pracma::trapz(eval.df$fpr, eval.df$rec)
+  aupr <- abs(pracma::trapz(eval.df$rec[-1], eval.df$prec[-1]))
   P <- sum(true.matrix, na.rm=T)
   if (P > 1) {
     aupr <- aupr / (1.0 - 1.0 / P)

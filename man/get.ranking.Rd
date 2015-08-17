@@ -7,14 +7,17 @@
 get.ranking(weights, max.links = 1e+05)
 }
 \arguments{
-\item{max.links}{The maximum number of links to output.}
+\item{weights}{A weighted adjacency matrix as returned by \code{\link{genie3}}}
 
-\item{matrix}{A weighted adjacency matrix as returned by genie3.}
+\item{max.links}{The maximum number of links to output.}
 }
 \value{
 A data frame of links.
 }
 \description{
 Make an ordered data frame of regulatory links
+}
+\seealso{
+\code{\link{genie3}}
 }
 

@@ -4,29 +4,29 @@
 \alias{genie3}
 \title{Compute weighted adjacency matrix of inferred network}
 \usage{
-genie3(data, K = "sqrt", nb.trees = 1000,
-  regulators = seq_len(ncol(data)), targets = seq_len(ncol(data)),
+genie3(data, regulators = seq_len(ncol(data)),
+  targets = seq_len(ncol(data)), K = "sqrt", nb.trees = 1000,
   importance.measure = "IncNodePurity", seed = NULL, trace = TRUE,
   mc.cores = 1)
 }
 \arguments{
 \item{data}{A matrix of observations of the different features. The rows must contain the observations.}
 
-\item{K}{The choice of number of input genes randomly selected as candidates at each node. Must be "all" for all input features, "sqrt" for the square root of all input features (default), or an integer.}
-
-\item{nb.trees}{The number of trees in ensemble for each target gene (default 1000).}
-
 \item{regulators}{A set of indices or column names of entities whose observed values regulate the observed values of the targets.}
 
 \item{targets}{A set of indices or column names of entities whose observed values are regulated by the regulators.}
 
-\item{importance.measure}{Type of variable importance measure. Must be either "IncNodePurity" for the importance measure based on decrease of residual sum of squares, or "%IncMSE" for importance measure optained by permutation of OOB data."}
+\item{K}{The choice of number of input genes randomly selected as candidates at each node. Must be \code{"all"} for all input features, \code{"sqrt"} for the square root of all input features (default), or an integer.}
+
+\item{nb.trees}{The number of trees in ensemble for each target gene (default 1000).}
+
+\item{importance.measure}{Type of variable importance measure. Must be either \code{"IncNodePurity"} for the importance measure based on decrease of residual sum of squares, or \code{"\%IncMSE"} for importance measure optained by permutation of OOB data.}
 
 \item{seed}{A random number generator seed for replication of analyses. NULL means the seed is not set.}
 
 \item{trace}{Output additional information.}
 
-\item{mc.cores}{The number of threads to use for parallel execution.}
+\item{mc.cores}{The number of threads to use for parallel execution.\code{\link{genie3}}}
 }
 \value{
 The weighted adjacency matrix of inferred network.
@@ -36,7 +36,7 @@ Compute weighted adjacency matrix of inferred network
 }
 \examples{
 data <- matrix(runif(100*100), ncol=100)
-true.matrix <- matrix(sample(0:1, 20*100, replace=T, prob=c(.9, .1)), ncol=10)
+true.matrix <- matrix(sample(0:1, 20*100, replace=TRUE, prob=c(.9, .1)), ncol=10)
 diag(true.matrix) <- 0
 weights <- genie3(data, regulators=1:20, targets=1:100, mc.cores=8)
 ranking <- get.ranking(weights)
@@ -49,5 +49,8 @@ ggplot(evaluation$metrics, aes(fpr, rec)) + geom_line() + coord_cartesian(xlim =
 
 # PR curve
 ggplot(evaluation$metrics, aes(rec, prec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1))
+}
+\references{
+Huynh-Thu, V. A. et al. (2010) Inferring Regulatory Networks from Expression Data Using Tree-Based Methods. PLoS ONE.
 }
 
