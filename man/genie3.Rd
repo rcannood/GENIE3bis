@@ -35,6 +35,7 @@ The weighted adjacency matrix of inferred network.
 Compute weighted adjacency matrix of inferred network
 }
 \examples{
+library(GENIE3)
 data <- matrix(runif(100*100), ncol=100)
 true.matrix <- matrix(sample(0:1, 20*100, replace=TRUE, prob=c(.9, .1)), ncol=10)
 diag(true.matrix) <- 0
@@ -43,12 +44,25 @@ ranking <- get.ranking(weights)
 evaluation <- evaluate.ranking(ranking, true.matrix=true.matrix)
 evaluation$au.score
 
-# ROC curve
+# draw a ROC curve
 library(ggplot2)
-ggplot(evaluation$metrics, aes(fpr, rec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1))
+ggplot(evaluation$metrics, aes(fpr, rec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1)) + theme_minimal()
 
-# PR curve
-ggplot(evaluation$metrics, aes(rec, prec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1))
+# draw a PR curve
+ggplot(evaluation$metrics, aes(rec, prec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, .1)) + theme_minimal()
+
+# Evaluate multiple rankings at the same time
+weights.cor <- as.matrix(abs(cor(weights[,1:20], weights[,1:100])))
+ranking.cor <- get.ranking(weights.cor)
+rankings <- list(GENIE3=ranking, Correlation=ranking.cor)
+evaluations <- evaluate.multiple.rankings(rankings, true.matrix=true.matrix)
+evaluations$au.score
+
+# draw a ROC curve
+ggplot(evaluations$metrics, aes(fpr, rec, colour=ranking.name)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1)) + theme_minimal()
+
+# draw a PR curve
+ggplot(evaluations$metrics, aes(rec, prec, colour=ranking.name)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, .1)) + theme_minimal()
 }
 \references{
 Huynh-Thu, V. A. et al. (2010) Inferring Regulatory Networks from Expression Data Using Tree-Based Methods. PLoS ONE.

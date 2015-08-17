@@ -18,6 +18,7 @@
 #' @import randomForest parallel
 #'
 #' @examples
+#' library(GENIE3)
 #' data <- matrix(runif(100*100), ncol=100)
 #' true.matrix <- matrix(sample(0:1, 20*100, replace=TRUE, prob=c(.9, .1)), ncol=10)
 #' diag(true.matrix) <- 0
@@ -26,12 +27,25 @@
 #' evaluation <- evaluate.ranking(ranking, true.matrix=true.matrix)
 #' evaluation$au.score
 #' 
-#' # ROC curve
+#' # draw a ROC curve
 #' library(ggplot2)
-#' ggplot(evaluation$metrics, aes(fpr, rec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1))
+#' ggplot(evaluation$metrics, aes(fpr, rec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1)) + theme_minimal()
 #' 
-#' # PR curve
-#' ggplot(evaluation$metrics, aes(rec, prec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1))
+#' # draw a PR curve
+#' ggplot(evaluation$metrics, aes(rec, prec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, .1)) + theme_minimal()
+#' 
+#' # Evaluate multiple rankings at the same time
+#' weights.cor <- as.matrix(abs(cor(weights[,1:20], weights[,1:100])))
+#' ranking.cor <- get.ranking(weights.cor)
+#' rankings <- list(GENIE3=ranking, Correlation=ranking.cor)
+#' evaluations <- evaluate.multiple.rankings(rankings, true.matrix=true.matrix)
+#' evaluations$au.score
+#' 
+#' # draw a ROC curve
+#' ggplot(evaluations$metrics, aes(fpr, rec, colour=ranking.name)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1)) + theme_minimal()
+#' 
+#' # draw a PR curve
+#' ggplot(evaluations$metrics, aes(rec, prec, colour=ranking.name)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, .1)) + theme_minimal()
 genie3 <- function(data, regulators=seq_len(ncol(data)), targets=seq_len(ncol(data)), 
                    K="sqrt", nb.trees=1000, importance.measure="IncNodePurity", 
                    seed=NULL, trace=TRUE, mc.cores=1) {
@@ -218,4 +232,32 @@ evaluate.ranking <- function(ranking, true.matrix, perf.measures=c("acc", "rec",
   
   # generate output
   list(metrics=eval.df, au.score=au.df)
+}
+
+#' Title Evaluate and compare multiple rankings
+#'
+#' @param rankings a list of rankings as preduced by \code{\link{get.ranking}}. See \code{\link{evaluate.ranking}} for more information.
+#' @param true.matrix a matrix with 0's and 1's, representing the golden standard. The rownames and colnames must me the same as the names used in the regulator and target columns in \code{ranking}.
+#' @param perf.measures the ROCR performance measures (See \code{\link[ROCR]{performance}}). Must at least contain \code{"fpr"}, \code{"rec"}, \code{"spec"}, and \code{"prec"}.
+#'
+#' @return a list containing 2 items, the ranked evaluation and the area under the curve scores
+#' @import dplyr
+#' @export
+#' 
+#' @seealso \code{\link{genie3}}
+evaluate.multiple.rankings <- function(rankings, true.matrix, perf.measures=c("acc", "rec", "prec", "fpr", "spec", "phi", "f")) {
+  requireNamespace("dplyr")
+  if (is.null(names(rankings))) {
+    ranking.names <- seq_along(rankings)
+  } else {
+    ranking.names <- names(rankings)
+  }
+  evals <- lapply(rankings, evaluate.ranking, true.matrix=true.matrix, perf.measures=perf.measures)
+  metrics <- dplyr::bind_rows(lapply(ranking.names, function(rn) {
+    data.frame(ranking.name=rn, evals[[rn]]$metrics, check.names = F, stringsAsFactors = F)
+  }))
+  au.score <- dplyr::bind_rows(lapply(ranking.names, function(rn) {
+    data.frame(ranking.name=rn, evals[[rn]]$au.score, check.names = F, stringsAsFactors = F)
+  }))
+  list(metrics=metrics, au.score=au.score)
 }
