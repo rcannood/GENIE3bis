@@ -15,7 +15,8 @@
 #' @return The weighted adjacency matrix of inferred network.
 #' @export
 #' 
-#' @import randomForest parallel
+#' @importFrom randomForest randomForest
+#' @importFrom parallel mclapply
 #'
 #' @examples
 #' library(GENIE3)
@@ -219,15 +220,16 @@ evaluate.ranking <- function(ranking, true.matrix, perf.measures=c("acc", "rec",
     balanced.acc=rowMeans(metrics[,c("rec", "spec")]),
     metrics
   )
+  eval.df[1,c("prec", "phi", "f")] <- 1
   
   # calculate AUs
   auroc <- pracma::trapz(eval.df$fpr, eval.df$rec)
-  aupr <- abs(pracma::trapz(eval.df$rec[-1], eval.df$prec[-1]))
+  aupr <- abs(pracma::trapz(eval.df$rec, eval.df$prec))
   P <- sum(true.matrix, na.rm=T)
-  if (P > 1) {
-    aupr <- aupr / (1.0 - 1.0 / P)
-  }
-  F1 <- ifelse(auroc + aupr != 0, 2 * auroc * aupr / auroc + aupr, 0)
+  #   if (P > 1) {
+  #     aupr <- aupr / (1.0 - 1.0 / P)
+  #   }
+  F1 <- ifelse(auroc + aupr != 0, 2 * auroc * aupr / (auroc + aupr), 0)
   au.df <- data.frame(auroc=auroc, aupr=aupr, F1=F1)
   
   # generate output
