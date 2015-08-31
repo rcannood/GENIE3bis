@@ -8,7 +8,7 @@ Authors@R: c(
     person("Alexandre", "Irrthum", role = c("aut", "trl"))
   )
 Description: This package is an R implementation of GEne Network Inference with Ensemble of Trees (GENIE3) algorithm. Support for multicore processes was added in this implementation.
-Depends: R (>= 3.2.1)
+Depends: R (>= 3.1.0)
 License: GPL (>= 2)
 LazyData: true
 Maintainer: 'Robrecht Cannoodt' <robrecht.cannoodt@gmail.com>
