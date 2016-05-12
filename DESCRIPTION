@@ -7,12 +7,23 @@ Authors@R: c(
     person("Van Anh", "Huynh-Thu", role = c("aut")),
     person("Alexandre", "Irrthum", role = c("aut", "trl"))
   )
-Description: This package is an R implementation of GEne Network Inference with Ensemble of Trees (GENIE3) algorithm. Support for multicore processes was added in this implementation.
-Depends: R (>= 3.1.0)
+Description: This package is an R implementation of GEne Network Inference with
+    Ensemble of Trees (GENIE3) algorithm. Support for multicore processes was added
+    in this implementation.
+Depends:
+    R (>= 3.1.0)
 License: GPL (>= 2)
 LazyData: true
 Maintainer: 'Robrecht Cannoodt' <robrecht.cannoodt@gmail.com>
-Imports: randomForest, parallel, reshape2, dplyr, ROCR, pracma
-Suggests: ggplot2
+Imports:
+    randomForest,
+    parallel,
+    reshape2,
+    dplyr,
+    ROCR,
+    pracma
+Suggests:
+    ggplot2
 URL: http://github.com/rcannood/GENIE3
 BugReports: https://github.com/rcannood/GENIE3/issues
+RoxygenNote: 5.0.1
