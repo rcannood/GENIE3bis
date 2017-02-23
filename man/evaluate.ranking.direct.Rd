@@ -2,15 +2,22 @@
 % Please edit documentation in R/genie3.R
 \name{evaluate.ranking.direct}
 \alias{evaluate.ranking.direct}
-\title{Title}
+\title{Evaluate a ranking}
 \usage{
 evaluate.ranking.direct(value, trues, perf.measures = c("acc", "rec", "prec",
   "fpr", "spec", "phi", "f"))
 }
 \arguments{
-\item{trues}{}
+\item{value}{The values produced by a ranking method, which will be ordered from high to low}
+
+\item{trues}{A vector with 0's and 1's, representing the golden standard.}
+
+\item{perf.measures}{the ROCR performance measures (See \code{\link[ROCR]{performance}}). Must at least contain \code{"fpr"}, \code{"rec"}, \code{"spec"}, and \code{"prec"}.}
+}
+\value{
+a list containing 2 items, the ranked evaluation and the area under the curve scores
 }
 \description{
-Title
+Evaluate a ranking
 }
 

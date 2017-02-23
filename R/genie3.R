@@ -144,7 +144,7 @@ genie3 <- function(data, regulators=seq_len(ncol(data)), targets=seq_len(ncol(da
     }
     x <- data[,setdiff(regulators, target.index),drop=F]
     y <- data[,target.index]
-    rf <- randomForest::randomForest(x, y, mtry=mtry, ntree=nb.trees, importance=TRUE)
+    rf <- randomForest::randomForest(x, y, mtry = mtry, ntree = nb.trees, importance = TRUE)
     im <- rf$importance[,importance.measure]
 
     out <- setNames(rep(0, num.regulators), regulator.names)
@@ -168,7 +168,7 @@ genie3 <- function(data, regulators=seq_len(ncol(data)), targets=seq_len(ncol(da
 #' @export
 #'
 #' @seealso \code{\link{genie3}}
-get.ranking <- function(weights, max.links=100000) {
+get.ranking <- function(weights, max.links = 100000) {
   requireNamespace("reshape2")
   requireNamespace("dplyr")
 
@@ -179,7 +179,7 @@ get.ranking <- function(weights, max.links=100000) {
   ranking <- dplyr::filter(ranking, as.character(regulator) != as.character(target))   # remove self loops
   ranking <- dplyr::arrange(ranking, dplyr::desc(value))                               # order by value
 
-  if (is.integer(max.links) && nrow(ranking) > max.links) {
+  if (is.numeric(max.links) && nrow(ranking) > max.links) {
     ranking <- dplyr::top_n(ranking, value, max.links)                                 # take top max.links edges
   }
 
@@ -189,7 +189,7 @@ get.ranking <- function(weights, max.links=100000) {
 #' Evaluate a network ranking
 #'
 #' @param ranking the data frame as returned by \code{\link{get.ranking}}. This data frame must contain at least 2 columns, called \code{regulator} and \code{target}.
-#' @param true.matrix a matrix with 0's and 1's, representing the golden standard. The rownames and colnames must me the same as the names used in the regulator and target columns in \code{ranking}.
+#' @param true.matrix a matrix with 0's and 1's, representing the golden standard. The rownames and colnames must be the same as the names used in the regulator and target columns in \code{ranking}.
 #'
 #' @return a list containing 2 items, the ranked evaluation and the area under the curve scores
 #' @import ROCR pracma dplyr
@@ -215,16 +215,14 @@ evaluate.ranking <- function(ranking, true.matrix) {
   evaluate.ranking.direct(ranking$value, ranking$tp)
 }
 
-#' Title
+#' Evaluate a ranking
 #'
-#' @param value
-#' @param trues
+#' @param value The values produced by a ranking method, which will be ordered from high to low
+#' @param trues A vector with 0's and 1's, representing the golden standard.
 #' @param perf.measures the ROCR performance measures (See \code{\link[ROCR]{performance}}). Must at least contain \code{"fpr"}, \code{"rec"}, \code{"spec"}, and \code{"prec"}.
 #'
-#' @return
+#' @return a list containing 2 items, the ranked evaluation and the area under the curve scores
 #' @export
-#'
-#' @examples
 evaluate.ranking.direct <- function(value, trues, perf.measures=c("acc", "rec", "prec", "fpr", "spec", "phi", "f")) {
   rocr.pred <- ROCR::prediction(value, trues)
 

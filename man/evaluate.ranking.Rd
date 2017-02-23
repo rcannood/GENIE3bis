@@ -9,9 +9,7 @@ evaluate.ranking(ranking, true.matrix)
 \arguments{
 \item{ranking}{the data frame as returned by \code{\link{get.ranking}}. This data frame must contain at least 2 columns, called \code{regulator} and \code{target}.}
 
-\item{true.matrix}{a matrix with 0's and 1's, representing the golden standard. The rownames and colnames must me the same as the names used in the regulator and target columns in \code{ranking}.}
-
-\item{perf.measures}{the ROCR performance measures (See \code{\link[ROCR]{performance}}). Must at least contain \code{"fpr"}, \code{"rec"}, \code{"spec"}, and \code{"prec"}.}
+\item{true.matrix}{a matrix with 0's and 1's, representing the golden standard. The rownames and colnames must be the same as the names used in the regulator and target columns in \code{ranking}.}
 }
 \value{
 a list containing 2 items, the ranked evaluation and the area under the curve scores
