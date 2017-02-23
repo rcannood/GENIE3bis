@@ -180,7 +180,7 @@ get.ranking <- function(weights, max.links = 100000) {
   ranking <- dplyr::arrange(ranking, dplyr::desc(value))                               # order by value
 
   if (is.numeric(max.links) && nrow(ranking) > max.links) {
-    ranking <- dplyr::top_n(ranking, value, max.links)                                 # take top max.links edges
+    ranking <- dplyr::top_n(ranking, max.links, value)                                 # take top max.links edges
   }
 
   ranking
