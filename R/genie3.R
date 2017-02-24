@@ -20,33 +20,34 @@
 #'
 #' @examples
 #' library(GENIE3)
+#' library(ggplot2)
+#' library(cowplot)
+#'
 #' data <- matrix(runif(100*100), ncol=100)
 #' true.matrix <- matrix(sample(0:1, 20*100, replace=TRUE, prob=c(.9, .1)), ncol=10)
 #' diag(true.matrix) <- 0
 #' weights <- genie3(data, regulators=1:20, targets=1:100, mc.cores=8)
 #' ranking <- get.ranking(weights)
-#' evaluation <- evaluate.ranking(ranking, true.matrix=true.matrix)
-#' evaluation$au.score
+#' eval <- evaluate.ranking(ranking, true.matrix=true.matrix)
+#' eval$au.score
 #'
-#' # draw a ROC curve
-#' library(ggplot2)
-#' ggplot(evaluation$metrics, aes(fpr, rec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1)) + theme_minimal()
-#'
-#' # draw a PR curve
-#' ggplot(evaluation$metrics, aes(rec, prec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, .1)) + theme_minimal()
+#' # draw a ROC and PR curves
+#' g1 <- ggplot(eval$metrics, aes(1 - spec, tpr)) + geom_step()
+#' g2 <- ggplot(eval$metrics, aes(tpr, prec)) + geom_path()
+#' plot_grid(g1, g2, nrow = 1)
 #'
 #' # Evaluate multiple rankings at the same time
 #' weights.cor <- as.matrix(abs(cor(weights[,1:20], weights[,1:100])))
 #' ranking.cor <- get.ranking(weights.cor)
 #' rankings <- list(GENIE3=ranking, Correlation=ranking.cor)
-#' evaluations <- evaluate.multiple.rankings(rankings, true.matrix=true.matrix)
-#' evaluations$au.score
+#' eval <- evaluate.multiple.rankings(rankings, true.matrix=true.matrix)
+#' eval$au.score
 #'
-#' # draw a ROC curve
-#' ggplot(evaluations$metrics, aes(fpr, rec, colour=ranking.name)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1)) + theme_minimal()
-#'
-#' # draw a PR curve
-#' ggplot(evaluations$metrics, aes(rec, prec, colour=ranking.name)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, .1)) + theme_minimal()
+#' # draw a ROC and PR curves
+#' library(cowplot)
+#' g1 <- ggplot(eval$metrics, aes(1 - spec, tpr, colour=name)) + geom_step()
+#' g2 <- ggplot(eval$metrics, aes(tpr, prec, colour=name)) + geom_path()
+#' plot_grid(g1, g2, nrow = 1)
 genie3 <- function(data, regulators=seq_len(ncol(data)), targets=seq_len(ncol(data)),
                    K="sqrt", nb.trees=1000, importance.measure="IncNodePurity",
                    seed=NULL, trace=TRUE, mc.cores=1) {
@@ -109,6 +110,12 @@ genie3 <- function(data, regulators=seq_len(ncol(data)), targets=seq_len(ncol(da
     stop("Parameter \"importance.measure\" must be \"IncNodePurity\" or \"%IncMSE\"")
   }
 
+  if (importance.measure == "IncNodePurity") {
+    importance.parameter <- F
+  } else if (importance.measure == "%IncMSE") {
+    importance.parameter <- T
+  }
+
   # check seed parameter, use the current seed if none is given.
   if (!is.null(seed)) {
     set.seed(seed)
@@ -117,7 +124,8 @@ genie3 <- function(data, regulators=seq_len(ncol(data)), targets=seq_len(ncol(da
   # check mc.cores parameter
   if (mc.cores == "qsub") {
     requireNamespace("PRISM")
-    lapplyfun <- function(X, FUN, ...) PRISM::qsub.lapply(X = X, FUN = FUN, qsub.environment = c("data", "feature.names", "regulators", "nb.trees", "importance.measure", "regulator.names", "num.regulators"))
+    qsub.environment <- c("data", "feature.names", "regulators", "nb.trees", "importance.measure", "regulator.names", "num.regulators", "importance.parameter")
+    lapplyfun <- function(X, FUN, ...) PRISM::qsub.lapply(X = X, FUN = FUN, qsub.environment = qsub.environment)
   } else if (mc.cores < 1) {
     stop("Parameter \"mc.cores\" must be larger than or equal to 0")
   } else if (mc.cores > 1) {
@@ -144,7 +152,7 @@ genie3 <- function(data, regulators=seq_len(ncol(data)), targets=seq_len(ncol(da
     }
     x <- data[,setdiff(regulators, target.index),drop=F]
     y <- data[,target.index]
-    rf <- randomForest::randomForest(x, y, mtry = mtry, ntree = nb.trees, importance = TRUE)
+    rf <- randomForest::randomForest(x, y, mtry = mtry, ntree = nb.trees, importance = importance.parameter)
     im <- rf$importance[,importance.measure]
 
     out <- setNames(rep(0, num.regulators), regulator.names)
@@ -190,91 +198,143 @@ get.ranking <- function(weights, max.links = 100000) {
 #'
 #' @param ranking the data frame as returned by \code{\link{get.ranking}}. This data frame must contain at least 2 columns, called \code{regulator} and \code{target}.
 #' @param true.matrix a matrix with 0's and 1's, representing the golden standard. The rownames and colnames must be the same as the names used in the regulator and target columns in \code{ranking}.
+#' @param num.extend.steps The number of steps with which to fill the ranking as if random, if only a part of the ranking is given
 #'
 #' @return a list containing 2 items, the ranked evaluation and the area under the curve scores
 #' @import ROCR pracma dplyr
 #' @export
 #'
 #' @seealso \code{\link{genie3}}
-evaluate.ranking <- function(ranking, true.matrix) {
+evaluate.ranking <- function(ranking, true.matrix, num.extend.steps = 10000) {
   requireNamespace("ROCR")
   requireNamespace("pracma")
-  requireNamespace("dplyr")
 
-  # This following line is added just to appease R check. When looking at this code, pretend this line doesn't exist.
-  regulator <- target <- value <- NULL
+  # Check whether columns are already numeric
+  if (!is.numeric(ranking$regulator)) {
+    regulator <- match(as.character(ranking$regulator), rownames(true.matrix))
+  } else {
+    regulator <- ranking$regulator
+  }
 
-  # get TPs along ranking
-  reg.names <- if (class(ranking$regulator) == "integer") seq_len(nrow(true.matrix)) else rownames(true.matrix)
-  tar.names <- if (class(ranking$target) == "integer") seq_len(ncol(true.matrix)) else colnames(true.matrix)
-  ranking <- dplyr::mutate(ranking,
-    tp=mapply(regulator, target, FUN=function(r, t) if (r %in% reg.names & t %in% tar.names) true.matrix[[r, t]] else 0),
-    value=if("value" %in% colnames(ranking)) value else percent_rank(-seq_len(nrow(ranking)))
-  )
+  if (!is.numeric(ranking$target)) {
+    target <- match(as.character(ranking$target), colnames(true.matrix))
+  } else {
+    target <- ranking$target
+  }
 
-  evaluate.ranking.direct(ranking$value, ranking$tp)
+  # Retrieve true positives
+  tp <- ifelse(!is.na(regulator) & !is.na(target), true.matrix[cbind(regulator, target)], 0)
+
+  # Retrieve value
+  if ("value" %in% colnames(ranking)) {
+    value <- ranking$value
+  } else {
+    value <- dplyr::percent_rank(-seq_along(tp))
+  }
+
+  num.positives <- sum(true.matrix, na.rm = T)
+  num.negatives <- sum(true.matrix == 0, na.rm = T)
+
+  evaluate.ranking.direct(tp, num.positives, num.negatives, num.extend.steps)
 }
 
 #' Evaluate a ranking
 #'
-#' @param value The values produced by a ranking method, which will be ordered from high to low
-#' @param trues A vector with 0's and 1's, representing the golden standard.
-#' @param perf.measures the ROCR performance measures (See \code{\link[ROCR]{performance}}). Must at least contain \code{"fpr"}, \code{"rec"}, \code{"spec"}, and \code{"prec"}.
+#' @param is.true A vector with 0's and 1's, representing the golden standard.
+#' @param num.positives The total number of positives
+#' @param num.negatives The total number of genatives
+#' @param num.extend.steps The number of steps with which to fill the ranking as if random, if only a part of the ranking is given
 #'
-#' @return a list containing 2 items, the ranked evaluation and the area under the curve scores
+#' @return a list containing two items, the ranked evaluation and the area under the curve scores
 #' @export
-evaluate.ranking.direct <- function(value, trues, perf.measures=c("acc", "rec", "prec", "fpr", "spec", "phi", "f")) {
-  rocr.pred <- ROCR::prediction(value, trues)
+evaluate.ranking.direct <- function(is.true, num.positives, num.negatives, num.extend.steps = 10000) {
+  requireNamespace("dplyr")
+  requireNamespace("pracma")
 
-  # run different metrics using ROCR
-  metrics <- do.call("cbind", lapply(perf.measures, function(p) ROCR::performance(rocr.pred, p, x.measure="cutoff")@y.values[[1]]))
-  colnames(metrics) <- perf.measures
+  # calculate base statistics
+  num.selected <- seq_along(is.true)
+  tp <- cumsum(is.true)
+  fp <- num.selected - tp
+  num.predicted <- length(tp)
+  num.negatives <- num.predictions - num.positives
 
-  # combine into one data frame
-  eval.df <- data.frame(
-    cutoff = ROCR::performance(rocr.pred, "acc", x.measure="cutoff")@x.values[[1]],
-    balanced.acc = rowMeans(metrics[,c("rec", "spec")]),
-    metrics
+  # extend base statistics, if necessary
+  if (num.extend.steps > 0 && num.predicted != num.predictions) {
+    diff.predictions <- num.predictions - num.predicted
+    diff.trues <- num.positives - tail(tp, 1)
+    diff.negs <- num.negatives - tail(fp, 1)
+
+    multiplier <- seq_len(num.extend.steps) / num.extend.steps
+
+    extra.num.selected <- multiplier * diff.predictions + tail(num.selected, 1)
+    extra.tp <- multiplier * diff.trues + tail(tp, 1)
+    extra.fp <- multiplier * diff.negs + tail(fp, 1)
+
+    num.selected <- c(num.selected, extra.num.selected)
+    is.true <- c(is.true, rep(NA, num.steps))
+    tp <- c(tp, extra.tp)
+    fp <- c(fp, extra.fp)
+  }
+
+  # calculate extended statistics
+  metrics <- dplyr::data_frame(
+    num.selected = c(0, num.selected),
+    is.true = c(NA, is.true),
+    tp = c(0, tp),
+    fp = c(0, fp),
+    fn = num.positives - tp,
+    tn = num.negatives - fp,
+    acc = (tp + tn) / (num.positives + num.negatives),
+    tpr = tp / num.positives,
+    spec = tn / num.negatives,
+    prec = ifelse(num.selected == 0, 1, tp / (tp + fp)),
+    npv = tn / (tn + fn),
+    f1 = 2 * tp / (2 * tp + fp + fn),
+    mcc = ifelse(num.selected == 0, 0, (tp * tn - fp * fn) / sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))),
+    informedness = tpr + spec - 1,
+    markedness = prec + npv - 1
   )
-  eval.df[1,c("prec", "phi", "f")] <- 1
 
-  # calculate AUs
-  auroc <- pracma::trapz(eval.df$fpr, eval.df$rec)
-  aupr <- abs(pracma::trapz(eval.df$rec, eval.df$prec))
-  #   if (num.gold > 1) {
-  #     aupr <- aupr / (1.0 - 1.0 / num.gold)
-  #   }
-  F1 <- ifelse(auroc + aupr != 0, 2 * auroc * aupr / (auroc + aupr), 0)
-  au.df <- data.frame(auroc = auroc, aupr =  aupr, F1 = F1)
+  # calculate area under the curves
+  area.under <- dplyr::data_frame(
+    auroc = pracma::trapz(1 - metrics$spec, metrics$tpr),
+    aupr = abs(pracma::trapz(metrics$tpr, metrics$prec)),
+    F1 = ifelse(auroc + aupr != 0, 2 * auroc * aupr / (auroc + aupr), 0)
+  )
 
   # generate output
-  list(metrics = eval.df, au.score = au.df)
+  list(metrics = metrics, area.under = area.under)
 }
 
-#' Title Evaluate and compare multiple rankings
+#' Evaluate and compare multiple rankings
 #'
 #' @param rankings a list of rankings as preduced by \code{\link{get.ranking}}. See \code{\link{evaluate.ranking}} for more information.
 #' @param true.matrix a matrix with 0's and 1's, representing the golden standard. The rownames and colnames must me the same as the names used in the regulator and target columns in \code{ranking}.
-#' @param perf.measures the ROCR performance measures (See \code{\link[ROCR]{performance}}). Must at least contain \code{"fpr"}, \code{"rec"}, \code{"spec"}, and \code{"prec"}.
+#' @param num.extend.steps The number of steps with which to fill the ranking as if random, if only a part of the ranking is given
 #'
 #' @return a list containing 2 items, the ranked evaluation and the area under the curve scores
 #' @import dplyr
 #' @export
 #'
 #' @seealso \code{\link{genie3}}
-evaluate.multiple.rankings <- function(rankings, true.matrix, perf.measures=c("acc", "rec", "prec", "fpr", "spec", "phi", "f")) {
+evaluate.multiple.rankings <- function(rankings, true.matrix, num.extend.steps = 10000) {
   requireNamespace("dplyr")
+
   if (is.null(names(rankings))) {
     ranking.names <- seq_along(rankings)
   } else {
     ranking.names <- names(rankings)
   }
-  evals <- lapply(rankings, evaluate.ranking, true.matrix=true.matrix, perf.measures=perf.measures)
+
+  evals <- lapply(rankings, evaluate.ranking, true.matrix = true.matrix, num.extend.steps = num.extend.steps)
+
   metrics <- dplyr::bind_rows(lapply(ranking.names, function(rn) {
-    data.frame(ranking.name=rn, evals[[rn]]$metrics, check.names = F, stringsAsFactors = F)
+    data.frame(name = rn, evals[[rn]]$metrics, check.names = F, stringsAsFactors = F)
   }))
-  au.score <- dplyr::bind_rows(lapply(ranking.names, function(rn) {
-    data.frame(ranking.name=rn, evals[[rn]]$au.score, check.names = F, stringsAsFactors = F)
+
+  area.under <- dplyr::bind_rows(lapply(ranking.names, function(rn) {
+    data.frame(name = rn, evals[[rn]]$area.under, check.names = F, stringsAsFactors = F)
   }))
-  list(metrics=metrics, au.score=au.score)
+
+  list(metrics = metrics, area.under = area.under)
 }

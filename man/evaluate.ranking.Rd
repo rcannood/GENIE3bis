@@ -4,12 +4,14 @@
 \alias{evaluate.ranking}
 \title{Evaluate a network ranking}
 \usage{
-evaluate.ranking(ranking, true.matrix)
+evaluate.ranking(ranking, true.matrix, num.extend.steps = 10000)
 }
 \arguments{
 \item{ranking}{the data frame as returned by \code{\link{get.ranking}}. This data frame must contain at least 2 columns, called \code{regulator} and \code{target}.}
 
 \item{true.matrix}{a matrix with 0's and 1's, representing the golden standard. The rownames and colnames must be the same as the names used in the regulator and target columns in \code{ranking}.}
+
+\item{num.extend.steps}{The number of steps with which to fill the ranking as if random, if only a part of the ranking is given}
 }
 \value{
 a list containing 2 items, the ranked evaluation and the area under the curve scores

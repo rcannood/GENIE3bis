@@ -36,33 +36,34 @@ Compute weighted adjacency matrix of inferred network
 }
 \examples{
 library(GENIE3)
+library(ggplot2)
+library(cowplot)
+
 data <- matrix(runif(100*100), ncol=100)
 true.matrix <- matrix(sample(0:1, 20*100, replace=TRUE, prob=c(.9, .1)), ncol=10)
 diag(true.matrix) <- 0
 weights <- genie3(data, regulators=1:20, targets=1:100, mc.cores=8)
 ranking <- get.ranking(weights)
-evaluation <- evaluate.ranking(ranking, true.matrix=true.matrix)
-evaluation$au.score
+eval <- evaluate.ranking(ranking, true.matrix=true.matrix)
+eval$au.score
 
-# draw a ROC curve
-library(ggplot2)
-ggplot(evaluation$metrics, aes(fpr, rec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1)) + theme_minimal()
-
-# draw a PR curve
-ggplot(evaluation$metrics, aes(rec, prec)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, .1)) + theme_minimal()
+# draw a ROC and PR curves
+g1 <- ggplot(eval$metrics, aes(1 - spec, tpr)) + geom_step()
+g2 <- ggplot(eval$metrics, aes(tpr, prec)) + geom_path()
+plot_grid(g1, g2, nrow = 1)
 
 # Evaluate multiple rankings at the same time
 weights.cor <- as.matrix(abs(cor(weights[,1:20], weights[,1:100])))
 ranking.cor <- get.ranking(weights.cor)
 rankings <- list(GENIE3=ranking, Correlation=ranking.cor)
-evaluations <- evaluate.multiple.rankings(rankings, true.matrix=true.matrix)
-evaluations$au.score
+eval <- evaluate.multiple.rankings(rankings, true.matrix=true.matrix)
+eval$au.score
 
-# draw a ROC curve
-ggplot(evaluations$metrics, aes(fpr, rec, colour=ranking.name)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, 1)) + theme_minimal()
-
-# draw a PR curve
-ggplot(evaluations$metrics, aes(rec, prec, colour=ranking.name)) + geom_line() + coord_cartesian(xlim = c(0, 1), ylim=c(0, .1)) + theme_minimal()
+# draw a ROC and PR curves
+library(cowplot)
+g1 <- ggplot(eval$metrics, aes(1 - spec, tpr, colour=name)) + geom_step()
+g2 <- ggplot(eval$metrics, aes(tpr, prec, colour=name)) + geom_path()
+plot_grid(g1, g2, nrow = 1)
 }
 \references{
 Huynh-Thu, V. A. et al. (2010) Inferring Regulatory Networks from Expression Data Using Tree-Based Methods. PLoS ONE.

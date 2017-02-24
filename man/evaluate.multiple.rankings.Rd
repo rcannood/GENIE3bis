@@ -2,23 +2,22 @@
 % Please edit documentation in R/genie3.R
 \name{evaluate.multiple.rankings}
 \alias{evaluate.multiple.rankings}
-\title{Title Evaluate and compare multiple rankings}
+\title{Evaluate and compare multiple rankings}
 \usage{
-evaluate.multiple.rankings(rankings, true.matrix, perf.measures = c("acc",
-  "rec", "prec", "fpr", "spec", "phi", "f"))
+evaluate.multiple.rankings(rankings, true.matrix, num.extend.steps = 10000)
 }
 \arguments{
 \item{rankings}{a list of rankings as preduced by \code{\link{get.ranking}}. See \code{\link{evaluate.ranking}} for more information.}
 
 \item{true.matrix}{a matrix with 0's and 1's, representing the golden standard. The rownames and colnames must me the same as the names used in the regulator and target columns in \code{ranking}.}
 
-\item{perf.measures}{the ROCR performance measures (See \code{\link[ROCR]{performance}}). Must at least contain \code{"fpr"}, \code{"rec"}, \code{"spec"}, and \code{"prec"}.}
+\item{num.extend.steps}{The number of steps with which to fill the ranking as if random, if only a part of the ranking is given}
 }
 \value{
 a list containing 2 items, the ranked evaluation and the area under the curve scores
 }
 \description{
-Title Evaluate and compare multiple rankings
+Evaluate and compare multiple rankings
 }
 \seealso{
 \code{\link{genie3}}

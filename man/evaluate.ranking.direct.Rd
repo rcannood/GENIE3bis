@@ -4,18 +4,20 @@
 \alias{evaluate.ranking.direct}
 \title{Evaluate a ranking}
 \usage{
-evaluate.ranking.direct(value, trues, perf.measures = c("acc", "rec", "prec",
-  "fpr", "spec", "phi", "f"))
+evaluate.ranking.direct(is.true, num.positives, num.negatives,
+  num.extend.steps = 10000)
 }
 \arguments{
-\item{value}{The values produced by a ranking method, which will be ordered from high to low}
+\item{is.true}{A vector with 0's and 1's, representing the golden standard.}
 
-\item{trues}{A vector with 0's and 1's, representing the golden standard.}
+\item{num.positives}{The total number of positives}
 
-\item{perf.measures}{the ROCR performance measures (See \code{\link[ROCR]{performance}}). Must at least contain \code{"fpr"}, \code{"rec"}, \code{"spec"}, and \code{"prec"}.}
+\item{num.negatives}{The total number of genatives}
+
+\item{num.extend.steps}{The number of steps with which to fill the ranking as if random, if only a part of the ranking is given}
 }
 \value{
-a list containing 2 items, the ranked evaluation and the area under the curve scores
+a list containing two items, the ranked evaluation and the area under the curve scores
 }
 \description{
 Evaluate a ranking
