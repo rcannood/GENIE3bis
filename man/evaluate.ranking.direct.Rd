@@ -4,7 +4,7 @@
 \alias{evaluate.ranking.direct}
 \title{Evaluate a ranking}
 \usage{
-evaluate.ranking.direct(is.true, num.positives, num.negatives,
+evaluate.ranking.direct(is.true, num.positives, num.predictions,
   num.extend.steps = 10000)
 }
 \arguments{
@@ -12,7 +12,7 @@ evaluate.ranking.direct(is.true, num.positives, num.negatives,
 
 \item{num.positives}{The total number of positives}
 
-\item{num.negatives}{The total number of genatives}
+\item{num.predictions}{The total number ranked values}
 
 \item{num.extend.steps}{The number of steps with which to fill the ranking as if random, if only a part of the ranking is given}
 }

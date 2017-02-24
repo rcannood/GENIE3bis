@@ -233,21 +233,21 @@ evaluate.ranking <- function(ranking, true.matrix, num.extend.steps = 10000) {
   }
 
   num.positives <- sum(true.matrix, na.rm = T)
-  num.negatives <- sum(true.matrix == 0, na.rm = T)
+  num.predictions <- sum(!is.na(true.matrix))
 
-  evaluate.ranking.direct(tp, num.positives, num.negatives, num.extend.steps)
+  evaluate.ranking.direct(tp, num.positives, num.predictions, num.extend.steps)
 }
 
 #' Evaluate a ranking
 #'
 #' @param is.true A vector with 0's and 1's, representing the golden standard.
 #' @param num.positives The total number of positives
-#' @param num.negatives The total number of genatives
+#' @param num.predictions The total number ranked values
 #' @param num.extend.steps The number of steps with which to fill the ranking as if random, if only a part of the ranking is given
 #'
 #' @return a list containing two items, the ranked evaluation and the area under the curve scores
 #' @export
-evaluate.ranking.direct <- function(is.true, num.positives, num.negatives, num.extend.steps = 10000) {
+evaluate.ranking.direct <- function(is.true, num.positives, num.predictions, num.extend.steps = 10000) {
   requireNamespace("dplyr")
   requireNamespace("pracma")
 
