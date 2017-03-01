@@ -271,7 +271,7 @@ evaluate.ranking.direct <- function(is.true, num.positives, num.predictions, num
     extra.fp <- multiplier * diff.negs + tail(fp, 1)
 
     num.selected <- c(num.selected, extra.num.selected)
-    is.true <- c(is.true, rep(NA, num.steps))
+    is.true <- c(is.true, rep(NA, num.extend.steps))
     tp <- c(tp, extra.tp)
     fp <- c(fp, extra.fp)
   }
