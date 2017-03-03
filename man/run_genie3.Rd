@@ -6,7 +6,7 @@
 \usage{
 run_genie3(data, regulators, targets, num_candidate_genes = "sqrt",
   num_trees = 1000, max_interactions = 1e+05,
-  importance_measure = "impurity", seed = NULL, trace = T,
+  importance_measure = "impurity", seed = NULL, verbose = T,
   scale_genes = T, parallel_type = 1)
 }
 \arguments{
@@ -29,7 +29,7 @@ the 'permutation' calculates the increase of MSE after permutations of the regul
 
 \item{seed}{A random number generator seed for replication of analyses. NULL means the seed is not set.}
 
-\item{trace}{Output additional information.}
+\item{verbose}{Output additional information.}
 
 \item{scale_genes}{Whether the genes should be scaled. This is recommended in order to make importance values comparable to one another.}
 

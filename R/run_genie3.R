@@ -11,7 +11,7 @@
 #'   The 'impurity' measure calculates the variance of the responses in each tree node and
 #'   the 'permutation' calculates the increase of MSE after permutations of the regulators.
 #' @param seed A random number generator seed for replication of analyses. NULL means the seed is not set.
-#' @param trace Output additional information.
+#' @param verbose Output additional information.
 #' @param scale_genes Whether the genes should be scaled. This is recommended in order to make importance values comparable to one another.
 #' @param parallel_type Either the number of threads to use for parallel execution, or a \code{\link[PRISM]{qsub_configuration}} object.
 #'
@@ -73,7 +73,7 @@
 run_genie3 <- function(data, regulators, targets,
                        num_candidate_genes = "sqrt", num_trees = 1000,
                        max_interactions = 100000, importance_measure = "impurity",
-                       seed = NULL, trace = T, scale_genes = T,
+                       seed = NULL, verbose = T, scale_genes = T,
                        parallel_type = 1) {
   requireNamespace("randomForest")
 
@@ -184,7 +184,7 @@ run_genie3 <- function(data, regulators, targets,
     }
   }
 
-  if (trace) {
+  if (verbose) {
     cat("GENIE3 parameter checks are OK!\n")
     cat("Starting GENIE3 computations.\n")
     flush.console()
@@ -200,7 +200,7 @@ run_genie3 <- function(data, regulators, targets,
     target_name <- gene_names[[target_index]]
     regs <- setdiff(regulators, target_index)
 
-    if (trace) {
+    if (verbose) {
       cat("Computing for target ", ifelse(is.null(gene_names), target.index, target_name), "\n", sep="")
       flush.console()
     }
