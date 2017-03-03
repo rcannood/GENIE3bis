@@ -171,7 +171,8 @@ run_genie3 <- function(data, regulators, targets,
   } else if (PRISM::is.qsub.config(parallel_type)) {
     requireNamespace("PRISM")
     qsub_environment <- c("data", "gene_names", "regulators", "num_trees",
-                          "importance_measure", "regulator_names", "num_regulators")
+                          "importance_measure", "regulator_names", "num_regulators",
+                          "verbose")
 
     lapply_function <- function(X, FUN) {
       qsub_config <- PRISM::override.qsub.config(parallel_type, name = "GENIE3")
@@ -206,6 +207,10 @@ run_genie3 <- function(data, regulators, targets,
     }
 
     if (requireNamespace("ranger", quietly = T)) {
+      if (verbose) {
+        cat("Using package 'ranger'\n")
+        flush.console()
+      }
       data_ix <- data[,c(regs, target_index)]
       target_formula <- as.formula(paste0("`", target_name, "` ~ ."))
 
@@ -219,6 +224,11 @@ run_genie3 <- function(data, regulators, targets,
 
       importance_values <- rf$variable.importance
     } else if (requireNamespace("randomForest", quietly = T)) {
+      if (verbose) {
+        cat("Using package 'randomForest'\n")
+        flush.console()
+      }
+
       x <- data[, regs, drop = F]
       y <- data[, target_index]
 
