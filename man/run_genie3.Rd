@@ -82,10 +82,10 @@ plot_curves(evals)
 ranking <- run_genie3(data, regulators, targets, parallel_type = 8)
 
 # run GENIE3 with PRISM
-ranking <- run_genie3(data, regulators, targets, parallel_type = PRISM::qsub.configuration())
+ranking <- run_genie3(data, regulators, targets, parallel_type = PRISM::override_qsub_config())
 
 # run GENIE3 with PRISM without waiting
-handle <- run_genie3(data, regulators, targets, parallel_type = PRISM::qsub.configuration(wait = F))
+handle <- run_genie3(data, regulators, targets, parallel_type = PRISM::override_qsub_config(wait = F))
 ranking <- retrieve_genie3_output(handle)
 }
 \references{

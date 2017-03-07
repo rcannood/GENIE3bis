@@ -65,10 +65,10 @@
 #' ranking <- run_genie3(data, regulators, targets, parallel_type = 8)
 #'
 #' # run GENIE3 with PRISM
-#' ranking <- run_genie3(data, regulators, targets, parallel_type = PRISM::qsub.configuration())
+#' ranking <- run_genie3(data, regulators, targets, parallel_type = PRISM::override_qsub_config())
 #'
 #' # run GENIE3 with PRISM without waiting
-#' handle <- run_genie3(data, regulators, targets, parallel_type = PRISM::qsub.configuration(wait = F))
+#' handle <- run_genie3(data, regulators, targets, parallel_type = PRISM::override_qsub_config(wait = F))
 #' ranking <- retrieve_genie3_output(handle)
 run_genie3 <- function(data, regulators, targets,
                        num_candidate_genes = "sqrt", num_trees = 1000,
@@ -168,19 +168,19 @@ run_genie3 <- function(data, regulators, targets,
       requireNamespace("parallel")
       lapply_function <- function(...) parallel::mclapply(..., mc.cores = parallel_type)
     }
-  } else if (PRISM::is.qsub.config(parallel_type)) {
+  } else if (PRISM:::is_qsub_config(parallel_type)) {
     requireNamespace("PRISM")
     qsub_environment <- c("data", "gene_names", "regulators", "num_trees",
                           "importance_measure", "regulator_names", "num_regulators",
                           "verbose")
 
     lapply_function <- function(X, FUN) {
-      qsub_config <- PRISM::override.qsub.config(parallel_type, name = "GENIE3")
-      PRISM::qsub.lapply(
+      qsub_config <- PRISM::override_qsub_config(parallel_type, name = "GENIE3")
+      PRISM::qsub_lapply(
         X = X,
         FUN = FUN,
-        qsub.environment = qsub_environment,
-        qsub.config = qsub_config
+        qsub_environment = qsub_environment,
+        qsub_config = qsub_config
       )
     }
   }
@@ -264,7 +264,7 @@ run_genie3 <- function(data, regulators, targets,
   )
 
   if (requireNamespace("PRISM", quietly = T) &&
-      PRISM::is.qsub.config(parallel_type) &&
+      PRISM:::is_qsub_config(parallel_type) &&
       !parallel_type$wait)  {
     handle
   } else {
@@ -285,9 +285,9 @@ run_genie3 <- function(data, regulators, targets,
 #' @seealso \code{\link{run_genie3}}
 retrieve_genie3_output <- function(handle) {
   if (requireNamespace("PRISM", quietly = T) &&
-      PRISM::is.qsub.config(handle$parallel_type) &&
+      PRISM:::is_qsub_config(handle$parallel_type) &&
       !handle$parallel_type$wait) {
-    outputs <- PRISM::qsub.retrieve(handle$lapply_output)
+    outputs <- PRISM::qsub_retrieve(handle$lapply_output)
   } else {
     outputs <- handle$lapply_output
   }
