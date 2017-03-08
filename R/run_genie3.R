@@ -14,6 +14,7 @@
 #' @param verbose Output additional information.
 #' @param scale_genes Whether the genes should be scaled. This is recommended in order to make importance values comparable to one another.
 #' @param parallel_type Either the number of threads to use for parallel execution, or a \code{\link[PRISM]{qsub_configuration}} object.
+#' @param rf_package Which Random Forests implementation to use. Currently 'ranger' and 'randomForest' are supported.
 #'
 #' @references Huynh-Thu, V. A. et al. (2010) Inferring Regulatory Networks from Expression Data Using Tree-Based Methods. PLoS ONE.
 #'
@@ -74,8 +75,7 @@ run_genie3 <- function(data, regulators, targets,
                        num_candidate_genes = "sqrt", num_trees = 1000,
                        max_interactions = 100000, importance_measure = "impurity",
                        seed = NULL, verbose = T, scale_genes = T,
-                       parallel_type = 1) {
-  requireNamespace("randomForest")
+                       parallel_type = 1, rf_package = "ranger") {
 
   # Check data ----------------------------------------------------------------
   if (is.matrix(data)) {
@@ -172,10 +172,10 @@ run_genie3 <- function(data, regulators, targets,
     requireNamespace("PRISM")
     qsub_environment <- c("data", "gene_names", "regulators", "num_trees",
                           "importance_measure", "regulator_names", "num_regulators",
-                          "verbose")
+                          "verbose", "rf_package")
 
     lapply_function <- function(X, FUN) {
-      qsub_config <- PRISM::override_qsub_config(parallel_type, name = "GENIE3")
+      qsub_config <- PRISM::override_qsub_config(parallel_type, name = "GENIE3", execute_before = c("module load gcc"))
       PRISM::qsub_lapply(
         X = X,
         FUN = FUN,
@@ -184,6 +184,12 @@ run_genie3 <- function(data, regulators, targets,
       )
     }
   }
+
+  # Check rf_package ----------------------------------------------------------
+  if (!rf_package %in% c("ranger", "randomForest")) {
+    stop(sQuote("rf_package"), " must be one of 'ranger' or 'randomForest'.")
+  }
+  requireNamespace(rf_package)
 
   if (verbose) {
     cat("GENIE3 parameter checks are OK!\n")
@@ -202,15 +208,13 @@ run_genie3 <- function(data, regulators, targets,
     regs <- setdiff(regulators, target_index)
 
     if (verbose) {
-      cat("Computing for target ", ifelse(is.null(gene_names), target.index, target_name), "\n", sep="")
+      cat("Computing for target ", ifelse(is.null(gene_names), target.index, target_name), " with package ", rf_package, "\n", sep="")
       flush.console()
     }
 
-    if (requireNamespace("ranger", quietly = T)) {
-      if (verbose) {
-        cat("Using package 'ranger'\n")
-        flush.console()
-      }
+    requireNamespace(rf_package)
+
+    if (rf_package == "ranger") {
       data_ix <- data[,c(regs, target_index)]
       target_formula <- as.formula(paste0("`", target_name, "` ~ ."))
 
@@ -223,12 +227,7 @@ run_genie3 <- function(data, regulators, targets,
       )
 
       importance_values <- rf$variable.importance
-    } else if (requireNamespace("randomForest", quietly = T)) {
-      if (verbose) {
-        cat("Using package 'randomForest'\n")
-        flush.console()
-      }
-
+    } else if (rf_package == "randomForest") {
       x <- data[, regs, drop = F]
       y <- data[, target_index]
 
@@ -243,8 +242,6 @@ run_genie3 <- function(data, regulators, targets,
       )
 
       importance_values <- rf$importance[,importance]
-    } else {
-      stop("Neither packages ", sQuote("ranger"), " nor ", sQuote("randomForest"), " are installed.")
     }
 
     tibble::data_frame(

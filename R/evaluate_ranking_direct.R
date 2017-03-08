@@ -19,7 +19,7 @@ evaluate_ranking_direct <- function(values, are_true, num_positive_interactions,
   requireNamespace("dplyr")
   requireNamespace("pracma")
 
-  ord <- order(rank(values, ties.method = "random"))
+  ord <- order(rank(values, ties.method = "random"), decreasing = T)
   values <- values[ord]
   are_true <- are_true[ord]
 

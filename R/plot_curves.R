@@ -12,10 +12,10 @@ plot_curves <- function(eval_object) {
 
   if (!"name" %in% colnames(metrics)) {
     aes_1 <- aes(1 - spec, tpr)
-    aes_2 <- aes(tpr, spec)
+    aes_2 <- aes(tpr, prec)
   } else {
     aes_1 <- aes(1 - spec, tpr, colour = name)
-    aes_2 <- aes(tpr, spec, colour = name)
+    aes_2 <- aes(tpr, prec, colour = name)
   }
   g1 <- ggplot(metrics, aes_1) + geom_step() + labs(x = "False positive rate", y = "Precision")
   g2 <- ggplot(metrics, aes_2) + geom_path() + labs(x = "Precision", y = "Recall")

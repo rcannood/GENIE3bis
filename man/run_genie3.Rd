@@ -7,7 +7,7 @@
 run_genie3(data, regulators, targets, num_candidate_genes = "sqrt",
   num_trees = 1000, max_interactions = 1e+05,
   importance_measure = "impurity", seed = NULL, verbose = T,
-  scale_genes = T, parallel_type = 1)
+  scale_genes = T, parallel_type = 1, rf_package = "ranger")
 }
 \arguments{
 \item{data}{A data_frame of observations of the different genes. The rows must contain the observations.}
@@ -34,6 +34,8 @@ the 'permutation' calculates the increase of MSE after permutations of the regul
 \item{scale_genes}{Whether the genes should be scaled. This is recommended in order to make importance values comparable to one another.}
 
 \item{parallel_type}{Either the number of threads to use for parallel execution, or a \code{\link[PRISM]{qsub_configuration}} object.}
+
+\item{rf_package}{Which Random Forests implementation to use. Currently 'ranger' and 'randomForest' are supported.}
 }
 \value{
 The weighted adjacency matrix of inferred network.
