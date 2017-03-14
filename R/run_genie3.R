@@ -15,6 +15,7 @@
 #' @param scale_genes Whether the genes should be scaled. This is recommended in order to make importance values comparable to one another.
 #' @param parallel_type Either the number of threads to use for parallel execution, or a \code{\link[PRISM]{qsub_configuration}} object.
 #' @param rf_package Which Random Forests implementation to use. Currently 'ranger' and 'randomForest' are supported.
+#' @param ... Extra parameters to be passed to the random forest. Take note of the package used.
 #'
 #' @references Huynh-Thu, V. A. et al. (2010) Inferring Regulatory Networks from Expression Data Using Tree-Based Methods. PLoS ONE.
 #'
@@ -75,7 +76,7 @@ run_genie3 <- function(data, regulators, targets,
                        num_candidate_genes = "sqrt", num_trees = 1000,
                        max_interactions = 100000, importance_measure = "impurity",
                        seed = NULL, verbose = T, scale_genes = T,
-                       parallel_type = 1, rf_package = "ranger") {
+                       parallel_type = 1, rf_package = "ranger", ...) {
 
   # Check data ----------------------------------------------------------------
   if (is.matrix(data)) {
@@ -197,6 +198,9 @@ run_genie3 <- function(data, regulators, targets,
     flush.console()
   }
 
+  # Check ... -----------------------------------------------------------------
+  extra_params <- list(...)
+
   # Scale the data
   if (scale_genes) {
     data <- scale(data)
@@ -218,12 +222,18 @@ run_genie3 <- function(data, regulators, targets,
       data_ix <- data[,c(regs, target_index)]
       target_formula <- as.formula(paste0("`", target_name, "` ~ ."))
 
-      rf <- ranger::ranger(
-        formula = target_formula,
-        data = as.data.frame(data_ix),
-        importance = importance_measure,
-        num.trees = num_trees,
-        mtry = mtry
+      rf <- do.call(
+        ranger::ranger,
+        c(
+          list(
+            formula = target_formula,
+            data = as.data.frame(data_ix),
+            importance = importance_measure,
+            num.trees = num_trees,
+            mtry = mtry
+          ),
+          extra_params
+        )
       )
 
       importance_values <- rf$variable.importance
@@ -233,12 +243,19 @@ run_genie3 <- function(data, regulators, targets,
 
       importance <- c("impurity"="IncNodePurity", "permutation"="%IncMSE")[importance_measure]
       calculate_IncMSE <- importance == "%IncMSE"
-      rf <- randomForest::randomForest(
-        x = x,
-        y = y,
-        ntree = num_trees,
-        mtry = mtry,
-        importance = calculate_IncMSE
+
+      rf <- do.call(
+        randomForest::randomForest,
+        c(
+          list(
+            x = x,
+            y = y,
+            ntree = num_trees,
+            mtry = mtry,
+            importance = calculate_IncMSE
+          ),
+          extra_params
+        )
       )
 
       importance_values <- rf$importance[,importance]
