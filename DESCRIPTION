@@ -18,6 +18,7 @@ Maintainer: 'Robrecht Cannoodt' <robrecht.cannoodt@gmail.com>
 Imports:
     randomForest,
     parallel,
+    ranger,
     reshape2,
     dplyr,
     ROCR,
